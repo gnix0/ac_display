@@ -17,4 +17,8 @@
 #define SLAVE_ADDR      0x32
 #define SLAVE_MODE      (400000U)   // 400 kbits/s
 
+typedef struct {
+    uint32_t voltages[64];
+} __attribute__((packed)) display_packet_t;
+
 #endif  // slave.h
