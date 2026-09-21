@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <math.h>
 
 #include "adc.h"
 #include "master.h"
@@ -44,40 +45,66 @@ void app_main(void)
     xTaskCreate(adc_and_i2c_task, "adc_and_i2c_task", 4096, &task_args, 5, NULL);
 }
 
+// static void adc_and_i2c_task(void *arg)
+// {
+//     master_task_args_t *args    = (master_task_args_t *)arg;
+//     display_packet_t packet     = {0};
+//     memset(&packet, 0, sizeof(packet));
+
+//     int raw_val         = 0;
+//     int voltage         = 0;
+//     uint8_t sample_idx  = 0;
+
+//     for (;;) {
+//         ESP_ERROR_CHECK(adc_oneshot_read(args->adc_handle, ADC_CHANNEL, &raw_val));
+
+//         if (args->do_calibration)
+//             ESP_ERROR_CHECK(adc_cali_raw_to_voltage(args->cali_handle, raw_val, &voltage));
+//         else
+//             voltage = raw_val; 
+
+//         packet.voltages[sample_idx++] = (uint32_t)voltage;
+
+//         if (sample_idx >= 64) {
+//             ESP_LOGI(TAG, "Transmitting 256 bytes to Slave...");
+            
+//             esp_err_t err = i2c_master_transmit(args->i2c_dev_handle, 
+//                                                 (const uint8_t *)&packet, 
+//                                                 sizeof(packet), 
+//                                                 pdMS_TO_TICKS(100));
+//             if (err != ESP_OK) {
+//                 ESP_LOGW(TAG, "I2C Transmit failed: %s", esp_err_to_name(err));
+//             }
+
+//             sample_idx = 0;
+//         }
+
+//         vTaskDelay(pdMS_TO_TICKS(10));
+//     }
+// }
+
 static void adc_and_i2c_task(void *arg)
 {
-    master_task_args_t *args    = (master_task_args_t *)arg;
-    display_packet_t packet     = {0};
-    memset(&packet, 0, sizeof(packet));
-
-    int raw_val         = 0;
-    int voltage         = 0;
-    uint8_t sample_idx  = 0;
+    master_task_args_t *args = (master_task_args_t *)arg;
+    display_packet_t packet = {0};
+    static float phase = 0.0f;
 
     for (;;) {
-        ESP_ERROR_CHECK(adc_oneshot_read(args->adc_handle, ADC_CHANNEL, &raw_val));
+        for (int i = 0; i < 64; i++) {
+            int synthetic_voltage = (int)(1650.0f + 1200.0f * sinf(phase + (i * 0.1f)));
+            packet.voltages[i] = (uint32_t)synthetic_voltage;
+        }
+        
+        phase += 0.2f;
 
-        if (args->do_calibration)
-            ESP_ERROR_CHECK(adc_cali_raw_to_voltage(args->cali_handle, raw_val, &voltage));
-        else
-            voltage = raw_val; 
-
-        packet.voltages[sample_idx++] = (uint32_t)voltage;
-
-        if (sample_idx >= 64) {
-            ESP_LOGI(TAG, "Transmitting 256 bytes to Slave...");
-            
-            esp_err_t err = i2c_master_transmit(args->i2c_dev_handle, 
-                                                (const uint8_t *)&packet, 
-                                                sizeof(packet), 
-                                                pdMS_TO_TICKS(100));
-            if (err != ESP_OK) {
-                ESP_LOGW(TAG, "I2C Transmit failed: %s", esp_err_to_name(err));
-            }
-
-            sample_idx = 0;
+        esp_err_t err = i2c_master_transmit(args->i2c_dev_handle, 
+                                            (const uint8_t *)&packet, 
+                                            sizeof(packet), 
+                                            pdMS_TO_TICKS(100));
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "I2C Transmit failed: %s", esp_err_to_name(err));
         }
 
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(80));
     }
 }

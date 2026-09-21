@@ -1,4 +1,5 @@
 #include "slave.h"
+#include "display.h"
 
 static const char *TAG = "I2C Slave Device";
 
@@ -19,7 +20,9 @@ void app_main(void)
 {
     ESP_LOGI(TAG, "Initializing I2C slave device...");
 
-    slave_rx_queue = xQueueCreate(10, sizeof(rx_msg_t));
+    display_init_ui();
+
+    slave_rx_queue = xQueueCreate(1, sizeof(rx_msg_t));
     if (NULL == slave_rx_queue) {
         ESP_LOGE(TAG, "slave_rx_queue failed");
         return;
@@ -32,8 +35,8 @@ void app_main(void)
         .scl_io_num         = SLAVE_SCL_IO,
         .sda_io_num         = SLAVE_SDA_IO,
         .slave_addr         = SLAVE_ADDR,
-        .send_buf_depth     = 256,
-        .receive_buf_depth  = 256,
+        .send_buf_depth     = 1024,
+        .receive_buf_depth  = 1024,
     };
 
     i2c_slave_dev_handle_t slave_handle = {0};
@@ -55,13 +58,13 @@ void app_main(void)
 }
 
 static bool slave_receive_cb(i2c_slave_dev_handle_t channel,
-                                    const i2c_slave_rx_done_event_data_t *evt_data,
-                                    void *user_data)
+                             const i2c_slave_rx_done_event_data_t *evt_data,
+                             void *user_data)
 {
     BaseType_t high_task_wakeup = pdFALSE;
 
     if (evt_data->length > 0 && NULL != slave_rx_queue) {
-        rx_msg_t msg = {0};
+        static rx_msg_t msg; 
 
         size_t copy_len = evt_data->length;
         if (copy_len > sizeof(msg.packet))
@@ -70,7 +73,7 @@ static bool slave_receive_cb(i2c_slave_dev_handle_t channel,
         memcpy(&msg.packet, evt_data->buffer, copy_len);
         msg.len = copy_len;
 
-        xQueueSendFromISR(slave_rx_queue, &msg, &high_task_wakeup);
+        xQueueOverwriteFromISR(slave_rx_queue, &msg, &high_task_wakeup);
     }
 
     return (pdTRUE == high_task_wakeup);
@@ -78,12 +81,16 @@ static bool slave_receive_cb(i2c_slave_dev_handle_t channel,
 
 static void slave_process_task(void *arg)
 {
-    rx_msg_t msg = {0};
+    rx_msg_t msg;
 
     for (;;) {
         if (xQueueReceive(slave_rx_queue, &msg, portMAX_DELAY) == pdTRUE) {
-            ESP_LOGI(TAG, "Received %zu bytes from I2C master", msg.len);
-            ESP_LOG_BUFFER_HEX(TAG, &msg.packet, msg.len);
+            if (msg.len == 256) {
+                display_update_wave(&msg.packet);
+                ESP_LOGI(TAG, "Chart updated successfully.");
+            } else {
+                ESP_LOGW(TAG, "Dropped partial packet: %zu bytes", msg.len);
+            }
         }
     }
 }

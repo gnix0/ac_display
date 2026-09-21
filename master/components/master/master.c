@@ -28,6 +28,7 @@ esp_err_t app_master_init(i2c_master_dev_handle_t *out_dev_handle)
         .dev_addr_length    = I2C_ADDR_BIT_LEN_7,
         .device_address     = SLAVE_ADDR,
         .scl_speed_hz       = SPEED_HZ,
+        .scl_wait_us        = 100000,
     };
     ret = i2c_master_bus_add_device(bus_handle, &device_config, out_dev_handle);
     if (ESP_OK != ret)
