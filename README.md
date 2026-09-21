@@ -3,6 +3,8 @@
 A dual-microcontroller real-time signal monitoring system with visualization. 
 Built on **ESP-IDF**, the system features an **ESP32-C6 (Master)** sampling analog voltage signals via ADC and streaming waveforms through structured packets over an I2C bus to an **ESP32-S3 LilyGo AMOLED (Slave)**, which executes the real-time chart rendering via **LVGL**.
 
+The current implementation uses C's math lib for simulating true AC readings. The next steps remaining in the projects are to configure and use the slave's DAC so the inputs from the master's ADC channel are actually sent, and optimizing the rendering of the plot.
+
 ---
 
 ## System Architecture
